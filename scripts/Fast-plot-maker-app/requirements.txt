@@ -1,0 +1,4 @@
+pandas
+numpy
+matplotlib
+PySide6>=6.6

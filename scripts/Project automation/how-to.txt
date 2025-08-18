@@ -1,0 +1,9 @@
+This folder aims to automate repetitive tasks in all opened images in a project.
+
+1- Saving measurements
+
+2- Setting base staining vectors
+
+3- Color corrections and smoothing (if needed)
+
+The base loop is writte in the first script file. 

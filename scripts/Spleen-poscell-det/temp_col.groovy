@@ -1,0 +1,1 @@
+setColorDeconvolutionStains('{"Name" : "miR-155 spleen", "Stain 1" : "Hematoxylin", "Values 1" : "0.5409002131151714 0.6778749436082925 0.49790814442025016", "Stain 2" : "miR-155", "Values 2" : "0.44712118626444214 0.8152209548221931 0.368099768557751", "Background" : " 255 255 255"}');

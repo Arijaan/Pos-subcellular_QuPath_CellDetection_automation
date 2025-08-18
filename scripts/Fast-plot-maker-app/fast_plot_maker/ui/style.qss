@@ -1,0 +1,12 @@
+/* Dark modern theme */
+QWidget { background-color: #12151a; color: #e5e7eb; font-family: 'Segoe UI', 'Roboto', sans-serif; }
+QFrame#Card { background-color:#1e2329; border:1px solid #2a3139; border-radius:10px; }
+QPushButton { background-color:#2563eb; color:white; border:none; padding:8px 14px; border-radius:6px; font-weight:600; }
+QPushButton:hover { background-color:#1d4ed8; }
+QPushButton:disabled { background-color:#3b4250; color:#9ca3af; }
+QLineEdit, QTextEdit { background:#1b2026; border:1px solid #2c343d; border-radius:6px; padding:4px 6px; }
+QProgressBar { background:#1b2026; border:1px solid #2c343d; border-radius:6px; text-align:center; }
+QProgressBar::chunk { background:#10b981; border-radius:6px; }
+QListWidget { background:#1b2026; border:1px solid #2c343d; border-radius:8px; }
+QLabel#Heading { font-size:20px; font-weight:700; color:#f3f4f6; }
+QLabel#Sub { color:#94a3b8; font-size:12px; }

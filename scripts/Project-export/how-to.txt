@@ -1,0 +1,7 @@
+When you want to move the projec to work on it on another computer, this folder will be very handy. 
+
+1- Run the "CopyImportedImages" script
+2- Copy the project folder 
+3- Paste it in the other computer
+4- Open the project file 
+5- Choose the "coped-images" folder as the new URL path
