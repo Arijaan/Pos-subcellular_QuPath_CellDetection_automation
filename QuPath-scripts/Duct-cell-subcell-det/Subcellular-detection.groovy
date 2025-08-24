@@ -6,7 +6,7 @@ runPlugin('qupath.imagej.detect.cells.WatershedCellDetection', [
 'requestedPixelSizeMicrons': 0.7,
 'backgroundRadiusMicrons': 0,
 'backgroundByReconstruction': true,
-'medianRadiusMicrons': 0.8,
+'medianRadiusMicrons': 0,
 'sigmaMicrons': 1,
 'minAreaMicrons': 5.0,
 'maxAreaMicrons': 500.0,
@@ -20,7 +20,7 @@ runPlugin('qupath.imagej.detect.cells.WatershedCellDetection', [
 ])
 
 runPlugin('qupath.imagej.detect.cells.SubcellularDetection', [
-'detection[miR-155]': 0.12,
+'detection[miR-155]': 0.17,
 'doSmoothing': true,
 'splitByIntensity': true,
 'splitByShape': false,

@@ -81,7 +81,7 @@ for (imageEntry in imageEntries) {
         
         // Create output path for this specific image
         def path1 = "C:/Users/Bob/OneDrive/Desktop/Third QuPath/Measurements/${cleanImageName}_subcell_measurements.csv"
-        def path2 = "C:/Users/psoor/OneDrive/Desktop/Bachelorarbeit/Spleen-QuPath/Measurements_ohne_prob_ctrl/${cleanImageName}_subcell_measurements.csv"
+        def path2 = "C:/Users/psoor/OneDrive/Desktop/Measurements_ctrl/${cleanImageName}_subcell_measurements.csv"
         def outputPath = path2
         def outputFile = new File(outputPath)
 

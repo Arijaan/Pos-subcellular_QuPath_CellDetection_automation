@@ -1,7 +1,9 @@
 import pandas as pd
 import os
 import numpy as np
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
+import tkinter as tk
+from tkinter import ttk
 
 # Try to import openpyxl, fallback to xlsxwriter if not available
 try:
@@ -15,18 +17,182 @@ except ImportError:
         print("Warning: Neither openpyxl nor xlsxwriter found. Excel functionality may be limited.")
         EXCEL_ENGINE = None
 
+
+class GroupInputDialog:
+    """
+    A tkinter dialog for dynamically entering group names/tags
+    """
+    def __init__(self, parent=None):
+        self.groups = []
+        self.result = None
+        
+        # Create the main window
+        self.root = tk.Toplevel(parent) if parent else tk.Tk()
+        self.root.title("Define Group Tags")
+        self.root.geometry("500x400")
+        self.root.resizable(True, True)
+        
+        # Make window modal
+        self.root.transient(parent)
+        self.root.grab_set()
+        
+        self.setup_ui()
+        
+        # Center the window
+        self.center_window()
+        
+    def center_window(self):
+        """Center the window on screen"""
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+        
+    def setup_ui(self):
+        """Setup the user interface"""
+        # Main frame
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Configure grid weights
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(2, weight=1)
+        
+        # Instructions
+        instructions = ttk.Label(main_frame, text=
+            "Enter group tags that appear in your CSV filenames.\n"
+            "For example: 'control', 't1d', 't2d', 'aab'\n"
+            "Files will be grouped based on these tags found in filenames.",
+            justify=tk.LEFT)
+        instructions.grid(row=0, column=0, columnspan=3, pady=(0, 10), sticky=(tk.W, tk.E))
+        
+        # Input frame
+        input_frame = ttk.Frame(main_frame)
+        input_frame.grid(row=1, column=0, columnspan=3, pady=(0, 10), sticky=(tk.W, tk.E))
+        input_frame.columnconfigure(0, weight=1)
+        
+        ttk.Label(input_frame, text="Group Tag:").grid(row=0, column=0, sticky=tk.W)
+        self.entry = ttk.Entry(input_frame, width=30)
+        self.entry.grid(row=0, column=1, padx=(5, 5), sticky=(tk.W, tk.E))
+        self.entry.bind('<Return>', self.add_group)
+        
+        ttk.Button(input_frame, text="Add", command=self.add_group).grid(row=0, column=2)
+        
+        # Groups listbox with scrollbar
+        list_frame = ttk.Frame(main_frame)
+        list_frame.grid(row=2, column=0, columnspan=3, pady=(0, 10), sticky=(tk.W, tk.E, tk.N, tk.S))
+        list_frame.columnconfigure(0, weight=1)
+        list_frame.rowconfigure(0, weight=1)
+        
+        # Listbox with scrollbar
+        self.listbox = tk.Listbox(list_frame, height=8)
+        self.listbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.listbox.yview)
+        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.listbox.configure(yscrollcommand=scrollbar.set)
+        
+        # Remove button
+        ttk.Button(list_frame, text="Remove Selected", 
+                  command=self.remove_group).grid(row=1, column=0, pady=(5, 0))
+        
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=3, column=0, columnspan=3, pady=(10, 0))
+        
+        ttk.Button(button_frame, text="OK", command=self.ok_clicked).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Cancel", command=self.cancel_clicked).pack(side=tk.LEFT)
+        
+        # Add some default suggestions
+        default_groups = ['control', 't1d', 't2d', 'aab']
+        for group in default_groups:
+            self.groups.append(group.lower())
+            self.listbox.insert(tk.END, group.lower())
+        
+        # Focus on entry
+        self.entry.focus()
+        
+    def add_group(self, event=None):
+        """Add a group to the list"""
+        group = self.entry.get().strip().lower()
+        if group and group not in self.groups:
+            self.groups.append(group)
+            self.listbox.insert(tk.END, group)
+            self.entry.delete(0, tk.END)
+        elif group in self.groups:
+            messagebox.showwarning("Duplicate", f"Group '{group}' already exists!")
+            
+    def remove_group(self):
+        """Remove selected group from the list"""
+        selection = self.listbox.curselection()
+        if selection:
+            index = selection[0]
+            group = self.groups.pop(index)
+            self.listbox.delete(index)
+            
+    def ok_clicked(self):
+        """Handle OK button click"""
+        if not self.groups:
+            messagebox.showwarning("No Groups", "Please add at least one group tag!")
+            return
+        self.result = self.groups.copy()
+        self.root.destroy()
+        
+    def cancel_clicked(self):
+        """Handle Cancel button click"""
+        self.result = None
+        self.root.destroy()
+        
+    def show(self):
+        """Show the dialog and return the result"""
+        self.root.wait_window()
+        return self.result
+
+
+def get_user_groups():
+    """
+    Get group tags from user input dialog
+    """
+    # Create a temporary root window (hidden)
+    temp_root = tk.Tk()
+    temp_root.withdraw()
+    
+    try:
+        dialog = GroupInputDialog(temp_root)
+        groups = dialog.show()
+        return groups
+    finally:
+        temp_root.destroy()
+
+
 def create_summary_files():
     """
     Creates one Excel file with separate sheets for each group containing individual summary tables.
     Each sheet will have columns for each file processed, similar to the Box_plot_data.txt structure.
+    Groups are now dynamically defined by user input.
     """
+    
+    # === GET USER INPUT FOR GROUPS ===
+    print("Getting group definitions from user...")
+    groups = get_user_groups()
+    
+    if not groups:
+        print("No groups defined. Exiting...")
+        return
+        
+    print(f"Using groups: {groups}")
     
     # === VARIABLE DEFINITIONS ===
     # Define the measurements folder path
-    measurements_folder = filedialog.askdirectory()
+    measurements_folder = filedialog.askdirectory(title="Select folder containing CSV measurement files")
     
-    # Define the groups we're looking for
-    groups = ['control', 't1d', 't2d', 'aab']
+    if not measurements_folder:
+        print("No folder selected. Exiting...")
+        return
     
     # Dictionary to store data for each group
     group_data = {group: {} for group in groups}
@@ -229,13 +395,12 @@ def create_summary_files():
     
     if EXCEL_ENGINE:
         # Create Excel file with multiple sheets
-        # Define proper sheet names mapping
-        sheet_name_mapping = {
-            'control': 'Control',
-            't1d': 'T1D',
-            't2d': 'T2D',
-            'aab': 'Aab'
-        }
+        # Generate dynamic sheet names mapping
+        sheet_name_mapping = {}
+        for group in groups:
+            # Capitalize first letter and clean up the group name for sheet naming
+            clean_name = group.replace('_', ' ').replace('-', ' ').title()
+            sheet_name_mapping[group] = clean_name
         
         with pd.ExcelWriter(excel_path, engine=EXCEL_ENGINE) as writer:
             # First, create individual group sheets
