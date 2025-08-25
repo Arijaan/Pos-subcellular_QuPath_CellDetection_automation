@@ -13,9 +13,18 @@ As of the current version, scripts need to be ran individually and staining vect
  The workflow starts in groovy with manual selection of representative staining vectors and cell detection parameters and then adjusting the appropriate project automation script and running it. Optimization for single images might be needed in this step. Afterwards, in the save measurements script in the project automation folder can be run to save the number of cells with classifications in comma-separated .csv files (Change the path to a directory of your choice). Afterwards the python script "measurement summarizer" can be ran to get summary files including the sum of all cells in your project (don't forget appropriate naming). The R-files can then be ran to get plots based on the measurement summary files, outputting barplots and prop test results.
 
 
-Flowchart for optimizing cell detection:
+Cell detection using QuPath:
 
-https://unibremende-my.sharepoint.com/:u:/g/personal/arian2_uni-bremen_de/EQiOiY7sl6pBuDFZZ62uWhcB2Img44maO3RIhlykpXyUzQ?e=wMveRc
+Currently, there are three cell/tissue types available to be detected with QuPath using .groovy scripts, since they were relevant for my bachelor's thesis. Most notable difference between these cell/tissue types is the plugin used for detection and the save_measurement script. Spleen uses pos-cell-det and the acini and ductal cells of the pancreas use the subcellular detection and classify cells into 1+, 2+ and 3+ based on the number of spots and clusters found in each cell.
+
+The ductal cell detection also requires a selection (ROI) around the desired cells, whereas the others don't. This is to choose a specific group of cells in the tissue that do not occupy the whole image, since the other scripts select the whole image before running the cell detection. 
+
+## Cell detection parameters:
+
+Since each picture can have different staining values, it is required to set the color deconvolution settings (staining vectors) manually for each picture before using the detection scripts. This can be done more quickly using the 
+
+
+[(old)Flowchart showing an overview of how the cell detection can be optimized](https://unibremende-my.sharepoint.com/:u:/g/personal/arian2_uni-bremen_de/EQiOiY7sl6pBuDFZZ62uWhcB2Img44maO3RIhlykpXyUzQ?e=wMveRc)
 
 # Dependencies:
 
@@ -47,15 +56,18 @@ pip install tkinter
 
 # Abbreviations/Naming System:
 
-PA: Project automation
+## Groovy - QuPath
 
-F: Final
+> PA: Project automation. Runs the script for all open images in the QuPath project. Same as 'multi'.
+> Col: Color convolution included
+> Single: Run the script only for the open image 
 
-T: in testing phase
+## Python and R
 
-Col: Color convolution included
+> T: in testing phase
+> F: Final
+> Dev: In development
 
-AI: Completely Written with generative AI and not tested
 
 # Future updates:
 
