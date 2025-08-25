@@ -21,7 +21,11 @@ The ductal cell detection also requires a selection (ROI) around the desired cel
 
 ## Cell detection parameters:
 
-Since each picture can have different staining values, it is required to set the color deconvolution settings (staining vectors) manually for each picture before using the detection scripts. This can be done more quickly using the 
+Since each picture can have different staining values, it is required to set the color deconvolution settings (staining vectors) manually for each picture before using the detection scripts. This can be done more quickly using the 'col-convolution' script with custom names for the vectors and the preset.
+
+The goal for a good detection would be to match the standards that would satisfy a visual inspection, meaning the correct detection of cells and the positive classification.
+
+A tip for achieving optimal results in this way, would be first tweaking the staining vectors to perfectly match the stains and then to adjust thresholds. For subcellular cell detection for example, the a darker example of the stain could be selected and then the threshold could be lowered or vice versa.
 
 
 [(old)Flowchart showing an overview of how the cell detection can be optimized](https://unibremende-my.sharepoint.com/:u:/g/personal/arian2_uni-bremen_de/EQiOiY7sl6pBuDFZZ62uWhcB2Img44maO3RIhlykpXyUzQ?e=wMveRc)
@@ -58,15 +62,15 @@ pip install tkinter
 
 ## Groovy - QuPath
 
-> PA: Project automation. Runs the script for all open images in the QuPath project. Same as 'multi'.
-> Col: Color convolution included
-> Single: Run the script only for the open image 
+- PA: Project automation. Runs the script for all open images in the QuPath project. Same as 'multi'.
+- Col: Color convolution included
+- Single: Run the script only for the open image 
 
 ## Python and R
 
-> T: in testing phase
-> F: Final
-> Dev: In development
+- T: in testing phase
+- F: Final
+- Dev: In development
 
 
 # Future updates:
