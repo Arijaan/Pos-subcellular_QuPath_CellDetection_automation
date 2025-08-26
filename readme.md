@@ -31,7 +31,9 @@ A tip for achieving optimal results in this way, would be first tweaking the sta
 [(old)Flowchart showing an overview of how the cell detection can be optimized](https://unibremende-my.sharepoint.com/:u:/g/personal/arian2_uni-bremen_de/EQiOiY7sl6pBuDFZZ62uWhcB2Img44maO3RIhlykpXyUzQ?e=wMveRc)
 
 
-<img src="how-to/Example-subcellular cell detection.png"/>
+
+## Subcellular cell detection example
+<img src="how-to/Example-subcellular cell detection.png" width="48" />
 
 # Dependencies:
 
