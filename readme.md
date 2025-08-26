@@ -33,7 +33,7 @@ A tip for achieving optimal results in this way, would be first tweaking the sta
 
 
 ## Subcellular cell detection example
-<img src="how-to/Example-subcellular cell detection.png" width="400" />
+<img src="how-to/Example-subcellular cell detection.png" width="500" />
 
 # Dependencies:
 
