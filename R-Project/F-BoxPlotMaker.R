@@ -10,7 +10,7 @@ path1 <- file.choose()
 
 # Ask for folder name
 cat("Enter the name for the output folder (will be created under 'plots and stats'):\n")
-folder_name <-"test"
+folder_name <-"Ductal_donors"
 
 # enter plot xlab names and legend name
 
@@ -406,13 +406,157 @@ saveWorkbook(wb, output_xlsx_path, overwrite = TRUE)
 input_copy_path <- file.path(output_dir, paste0("INPUT_", basename(path1)))
 file.copy(path1, input_copy_path, overwrite = TRUE)
 
+# POWER ANALYSIS
+cat("\n", rep("=", 60), "\n", sep = "")
+cat("POWER ANALYSIS - SAMPLE SIZE CALCULATION")
+cat("\n", rep("=", 60), "\n", sep = "")
+
+# Install pwr package if not available
+if (!require(pwr, quietly = TRUE)) {
+  install.packages("pwr")
+  library(pwr)
+}
+
+# Function to perform power analysis for t-test
+perform_power_analysis <- function(control_data, comparison_data, group_name) {
+  # Calculate effect size (Cohen's d)
+  control_mean <- mean(control_data, na.rm = TRUE)
+  control_sd <- sd(control_data, na.rm = TRUE)
+  comparison_mean <- mean(comparison_data, na.rm = TRUE)
+  comparison_sd <- sd(comparison_data, na.rm = TRUE)
+  
+  # Pooled standard deviation
+  pooled_sd <- sqrt(((length(control_data) - 1) * control_sd^2 + 
+                     (length(comparison_data) - 1) * comparison_sd^2) / 
+                    (length(control_data) + length(comparison_data) - 2))
+  
+  # Cohen's d effect size
+  cohens_d <- abs(control_mean - comparison_mean) / pooled_sd
+  
+  # Power analysis for 80% power (0.80)
+  power_result <- pwr.t.test(d = cohens_d, 
+                            power = 0.80, 
+                            sig.level = 0.05, 
+                            type = "two.sample")
+  
+  # Current sample sizes
+  current_n_control <- length(control_data)
+  current_n_comparison <- length(comparison_data)
+  
+  # Calculate current power with existing sample sizes
+  current_power <- pwr.t.test(n = min(current_n_control, current_n_comparison),
+                             d = cohens_d,
+                             sig.level = 0.05,
+                             type = "two.sample")$power
+  
+  return(list(
+    group = group_name,
+    cohens_d = cohens_d,
+    effect_size_interpretation = case_when(
+      cohens_d < 0.2 ~ "Very Small",
+      cohens_d < 0.5 ~ "Small", 
+      cohens_d < 0.8 ~ "Medium",
+      TRUE ~ "Large"
+    ),
+    required_n_per_group = ceiling(power_result$n),
+    current_n_control = current_n_control,
+    current_n_comparison = current_n_comparison,
+    current_power = round(current_power, 3),
+    control_mean = round(control_mean, 2),
+    comparison_mean = round(comparison_mean, 2),
+    control_sd = round(control_sd, 2),
+    comparison_sd = round(comparison_sd, 2)
+  ))
+}
+
+# Perform power analysis for each comparison group
+power_results <- list()
+
+# Get control data
+control_data <- combined_data[combined_data$Group == "Control", "Percentage"]
+
+cat("\nUsing Control group as baseline for power analysis:")
+cat("\n- Control mean:", round(mean(control_data, na.rm = TRUE), 2), "%")
+cat("\n- Control SD:", round(sd(control_data, na.rm = TRUE), 2), "%")
+cat("\n- Control n:", length(control_data))
+
+cat("\n\nPOWER ANALYSIS RESULTS (for 80% power, α = 0.05):\n")
+cat(rep("-", 80), "\n", sep = "")
+
+for (group in names(all_data)) {
+  if (group != "Control") {
+    comparison_data <- combined_data[combined_data$Group == group, "Percentage"]
+    
+    if (length(comparison_data) > 0) {
+      power_analysis <- perform_power_analysis(control_data, comparison_data, group)
+      power_results[[group]] <- power_analysis
+      
+      cat("\n", group, " vs Control:\n", sep = "")
+      cat("  Effect Size (Cohen's d):", sprintf("%.3f", power_analysis$cohens_d), 
+          "(", power_analysis$effect_size_interpretation, ")\n")
+      cat("  Required sample size per group:", power_analysis$required_n_per_group, "\n")
+      cat("  Current sample sizes: Control =", power_analysis$current_n_control, 
+          ",", group, "=", power_analysis$current_n_comparison, "\n")
+      cat("  Current statistical power:", sprintf("%.1f%%", power_analysis$current_power * 100), "\n")
+      cat("  Means: Control =", power_analysis$control_mean, "%, ", 
+          group, " =", power_analysis$comparison_mean, "%\n")
+      
+      # Additional sample size recommendations
+      additional_needed_control <- max(0, power_analysis$required_n_per_group - power_analysis$current_n_control)
+      additional_needed_comparison <- max(0, power_analysis$required_n_per_group - power_analysis$current_n_comparison)
+      
+      if (additional_needed_control > 0 || additional_needed_comparison > 0) {
+        cat("  Additional samples needed: Control =", additional_needed_control, 
+            ",", group, "=", additional_needed_comparison, "\n")
+      } else {
+        cat("  ✓ Adequate sample size for 80% power\n")
+      }
+    }
+  }
+}
+
+# Create power analysis summary table
+if (length(power_results) > 0) {
+  power_summary <- data.frame(
+    Comparison = paste(names(power_results), "vs Control"),
+    Effect_Size_Cohens_d = sapply(power_results, function(x) round(x$cohens_d, 3)),
+    Effect_Size_Category = sapply(power_results, function(x) x$effect_size_interpretation),
+    Required_N_per_Group = sapply(power_results, function(x) x$required_n_per_group),
+    Current_N_Control = sapply(power_results, function(x) x$current_n_control),
+    Current_N_Comparison = sapply(power_results, function(x) x$current_n_comparison),
+    Current_Power = sapply(power_results, function(x) paste0(round(x$current_power * 100, 1), "%")),
+    Adequate_Power = sapply(power_results, function(x) ifelse(x$current_power >= 0.80, "Yes", "No")),
+    stringsAsFactors = FALSE
+  )
+  
+  cat("\n\nPOWER ANALYSIS SUMMARY TABLE:\n")
+  print(power_summary)
+  
+  # Add power analysis to Excel file
+  addWorksheet(wb, "Power_Analysis")
+  writeData(wb, "Power_Analysis", power_summary)
+  
+  # Add interpretation guide
+  interpretation_guide <- data.frame(
+    Effect_Size_d = c("< 0.2", "0.2 - 0.5", "0.5 - 0.8", "> 0.8"),
+    Interpretation = c("Very Small", "Small", "Medium", "Large"),
+    stringsAsFactors = FALSE
+  )
+  
+  writeData(wb, "Power_Analysis", interpretation_guide, startRow = nrow(power_summary) + 4)
+  writeData(wb, "Power_Analysis", "Cohen's d Effect Size Interpretation:", 
+            startRow = nrow(power_summary) + 3)
+  
+  # Save updated workbook
+  saveWorkbook(wb, output_xlsx_path, overwrite = TRUE)
+}
 
 
 cat("\nResults saved to folder:", folder_name, "\n")
 cat("Full path:", output_dir, "\n")
 cat("Files created:\n")
 cat("- boxplot.png\n")
-cat("- Statistical_Results.xlsx\n")
+cat("- Statistical_Results.xlsx (now includes Power Analysis sheet)\n")
 cat("- INPUT_", basename(path1), "\n", sep = "")
 
 cat("\n", rep("=", 60), "\n", sep = "")
@@ -441,5 +585,274 @@ if (nrow(stat_results$anova) > 0) {
 }
 
 cat("\n", rep("=", 60), "\n", sep = "")
+
+# ADDITIONAL POWER ANALYSIS FOR EACH COMPARISON
+cat("\n", rep("=", 60), "\n", sep = "")
+cat("DETAILED POWER ANALYSIS FOR EACH COMPARISON AND CLASSIFICATION")
+cat("\n", rep("=", 60), "\n", sep = "")
+
+# Install effsize package if not available for Cohen's d calculation
+if (!require(effsize, quietly = TRUE)) {
+  install.packages("effsize")
+  library(effsize)
+}
+
+# Function to perform and display power analysis for specific classification
+perform_classification_power_analysis <- function(control_data, treatment_data, comparison_name, classification) {
+  cat("\n", rep("-", 60), "\n", sep = "")
+  cat("POWER ANALYSIS:", comparison_name, "- Classification:", classification, "\n")
+  cat(rep("-", 60), "\n", sep = "")
+  
+  if (length(control_data) == 0 || length(treatment_data) == 0) {
+    cat("Insufficient data for this classification\n")
+    return(NULL)
+  }
+  
+  # Calculate Cohen's d using effsize package
+  d_value <- tryCatch({
+    cohen.d(control_data, treatment_data)
+  }, error = function(e) {
+    # Fallback calculation if cohen.d fails
+    control_mean <- mean(control_data, na.rm = TRUE)
+    control_sd <- sd(control_data, na.rm = TRUE)
+    treatment_mean <- mean(treatment_data, na.rm = TRUE)
+    treatment_sd <- sd(treatment_data, na.rm = TRUE)
+    
+    # Pooled standard deviation
+    pooled_sd <- sqrt(((length(control_data) - 1) * control_sd^2 + 
+                       (length(treatment_data) - 1) * treatment_sd^2) / 
+                      (length(control_data) + length(treatment_data) - 2))
+    
+    cohens_d <- (treatment_mean - control_mean) / pooled_sd
+    
+    # Create similar structure to cohen.d output
+    list(estimate = cohens_d, 
+         magnitude = case_when(
+           abs(cohens_d) < 0.2 ~ "negligible",
+           abs(cohens_d) < 0.5 ~ "small", 
+           abs(cohens_d) < 0.8 ~ "medium",
+           TRUE ~ "large"
+         ))
+  })
+  
+  cat("Cohen's d effect size:", round(d_value$estimate, 4), "\n")
+  cat("Effect size magnitude:", d_value$magnitude, "\n")
+  
+  # Calculate descriptive statistics
+  cat("\nDescriptive Statistics:")
+  cat("\n- Control: Mean =", round(mean(control_data, na.rm = TRUE), 2), 
+      "%, SD =", round(sd(control_data, na.rm = TRUE), 2), "%, n =", length(control_data))
+  cat("\n- Treatment: Mean =", round(mean(treatment_data, na.rm = TRUE), 2), 
+      "%, SD =", round(sd(treatment_data, na.rm = TRUE), 2), "%, n =", length(treatment_data))
+  
+  # Perform power analysis with error handling
+  power_result <- tryCatch({
+    # Check if effect size is extremely large
+    effect_size <- abs(d_value$estimate)
+    if (effect_size > 5) {
+      cat("\n\nNote: Effect size is extremely large (d =", round(effect_size, 2), ")")
+      cat("\nWith such a large effect, very small sample sizes are adequate for 80% power.")
+      cat("\nRequired sample size per group: ≤ 3")
+      
+      # Calculate current power manually for very large effects
+      current_power <- pwr.t.test(n = min(length(control_data), length(treatment_data)),
+                                 d = effect_size,
+                                 sig.level = 0.05,
+                                 type = "two.sample")$power
+      
+      list(n = 3, d = effect_size, note = "Very large effect")
+    } else {
+      # Normal power analysis
+      pwr.t.test(d = effect_size, 
+                sig.level = 0.05, 
+                power = 0.80, 
+                type = "two.sample", 
+                alternative = "two.sided")
+    }
+  }, error = function(e) {
+  cat("\n\nError in power calculation:", e$message)
+    cat("\nThis typically occurs with extremely large or small effect sizes.")
+    
+    # Provide alternative calculation
+    effect_size <- abs(d_value$estimate)
+    if (effect_size > 3) {
+      cat("\nWith effect size d =", round(effect_size, 2), ", very small samples are adequate.")
+      list(n = 3, d = effect_size, note = "Error - likely very large effect")
+    } else {
+      cat("\nUnable to calculate required sample size.")
+      list(n = NA, d = effect_size, note = "Calculation error")
+    }
+  })
+  
+  if (!is.null(power_result) && !is.na(power_result$n)) {
+    if (is.null(power_result$note)) {
+      cat("\n\nPower Analysis Results:\n")
+      print(power_result)
+    }
+    
+    required_n <- ceiling(power_result$n)
+  } else {
+    required_n <- NA
+  }
+  
+  # Current sample sizes and power
+  current_power <- tryCatch({
+    pwr.t.test(n = min(length(control_data), length(treatment_data)),
+               d = abs(d_value$estimate),
+               sig.level = 0.05,
+               type = "two.sample")$power
+  }, error = function(e) {
+    if (abs(d_value$estimate) > 3) {
+      0.99  # Very high power for large effects
+    } else {
+      NA
+    }
+  })
+  
+  if (!is.na(current_power)) {
+    cat("\nCurrent power with existing sample sizes:", round(current_power * 100, 1), "%")
+  } else {
+    cat("\nCurrent power: Unable to calculate")
+  }
+  
+  # Sample size recommendations
+  if (!is.na(required_n)) {
+    additional_control <- max(0, required_n - length(control_data))
+    additional_treatment <- max(0, required_n - length(treatment_data))
+    
+    if (additional_control > 0 || additional_treatment > 0) {
+      cat("\nAdditional samples needed:")
+      cat("\n- Control: +", additional_control, "samples")
+      cat("\n- Treatment: +", additional_treatment, "samples")
+    } else {
+      cat("\n✓ Adequate sample size for 80% power")
+    }
+  } else {
+    cat("\nSample size recommendations: Unable to calculate")
+  }
+  
+  cat("\n")
+  
+  return(list(
+    comparison = comparison_name,
+    classification = classification,
+    cohens_d = d_value$estimate,
+    effect_magnitude = d_value$magnitude,
+    required_n = ifelse(is.na(required_n), "Unable to calculate", required_n),
+    current_power = ifelse(is.na(current_power), NA, current_power),
+    control_n = length(control_data),
+    treatment_n = length(treatment_data),
+    control_mean = mean(control_data, na.rm = TRUE),
+    treatment_mean = mean(treatment_data, na.rm = TRUE)
+  ))
+}
+
+# Perform power analysis for each comparison and classification
+all_power_results <- list()
+classifications <- c("1+", "2+", "3+")
+
+# Control vs T1D
+if ("T1D" %in% names(all_data)) {
+  cat("\n", rep("=", 80), "\n", sep = "")
+  cat("T1D vs Control")
+  cat("\n", rep("=", 80), "\n", sep = "")
+  
+  for (class in classifications) {
+    control_data <- combined_data[combined_data$Group == "Control" & combined_data$Classification == class, "Percentage"]
+    t1d_data <- combined_data[combined_data$Group == "T1D" & combined_data$Classification == class, "Percentage"]
+    
+    result <- perform_classification_power_analysis(control_data, t1d_data, "T1D vs Control", class)
+    if (!is.null(result)) {
+      all_power_results[[paste("T1D_vs_Control", class, sep = "_")]] <- result
+    }
+  }
+}
+
+# Control vs T2D
+if ("T2D" %in% names(all_data)) {
+  cat("\n", rep("=", 80), "\n", sep = "")
+  cat("T2D vs Control")
+  cat("\n", rep("=", 80), "\n", sep = "")
+  
+  for (class in classifications) {
+    control_data <- combined_data[combined_data$Group == "Control" & combined_data$Classification == class, "Percentage"]
+    t2d_data <- combined_data[combined_data$Group == "T2D" & combined_data$Classification == class, "Percentage"]
+    
+    result <- perform_classification_power_analysis(control_data, t2d_data, "T2D vs Control", class)
+    if (!is.null(result)) {
+      all_power_results[[paste("T2D_vs_Control", class, sep = "_")]] <- result
+    }
+  }
+}
+
+# Control vs Aab
+if ("Aab" %in% names(all_data)) {
+  cat("\n", rep("=", 80), "\n", sep = "")
+  cat("Aab vs Control")
+  cat("\n", rep("=", 80), "\n", sep = "")
+  
+  for (class in classifications) {
+    control_data <- combined_data[combined_data$Group == "Control" & combined_data$Classification == class, "Percentage"]
+    aab_data <- combined_data[combined_data$Group == "Aab" & combined_data$Classification == class, "Percentage"]
+    
+    result <- perform_classification_power_analysis(control_data, aab_data, "Aab vs Control", class)
+    if (!is.null(result)) {
+      all_power_results[[paste("Aab_vs_Control", class, sep = "_")]] <- result
+    }
+  }
+}
+
+# Create comprehensive summary table
+if (length(all_power_results) > 0) {
+  cat("\n", rep("=", 100), "\n", sep = "")
+  cat("COMPREHENSIVE POWER ANALYSIS SUMMARY")
+  cat("\n", rep("=", 100), "\n", sep = "")
+  
+  summary_df <- data.frame(
+    Comparison = sapply(all_power_results, function(x) x$comparison),
+    Classification = sapply(all_power_results, function(x) x$classification),
+    Cohens_d = sapply(all_power_results, function(x) round(x$cohens_d, 3)),
+    Effect_Size = sapply(all_power_results, function(x) x$effect_magnitude),
+    Required_N_per_Group = sapply(all_power_results, function(x) x$required_n),
+    Current_N_Control = sapply(all_power_results, function(x) x$control_n),
+    Current_N_Treatment = sapply(all_power_results, function(x) x$treatment_n),
+    Current_Power_Percent = sapply(all_power_results, function(x) round(x$current_power * 100, 1)),
+    Control_Mean = sapply(all_power_results, function(x) round(x$control_mean, 2)),
+    Treatment_Mean = sapply(all_power_results, function(x) round(x$treatment_mean, 2)),
+    Adequate_Power = sapply(all_power_results, function(x) ifelse(x$current_power >= 0.80, "Yes", "No")),
+    stringsAsFactors = FALSE
+  )
+  
+  print(summary_df)
+  
+  # Add detailed power analysis to Excel file
+  addWorksheet(wb, "Detailed_Power_Analysis")
+  writeData(wb, "Detailed_Power_Analysis", summary_df)
+  
+  # Add classification-specific interpretation
+  classification_note <- data.frame(
+    Note = c("1+ = Low expression cells", 
+             "2+ = Medium expression cells", 
+             "3+ = High expression cells",
+             "",
+             "Power Analysis Target: 80% power, α = 0.05"),
+    stringsAsFactors = FALSE
+  )
+  
+  writeData(wb, "Detailed_Power_Analysis", classification_note, startRow = nrow(summary_df) + 3)
+  
+  # Save updated workbook
+  saveWorkbook(wb, output_xlsx_path, overwrite = TRUE)
+}
+
+
+
+
+
+
+
+
+
+
 
 

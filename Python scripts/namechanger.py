@@ -1,9 +1,9 @@
 import os
 
-directory = r"C:\Users\psoor\OneDrive\Desktop\Bachelorarbeit\Pictures\Spleen\control - didnt go too well"
+directory = r"C:\Users\psoor\OneDrive\Desktop\Bachelorarbeit\Ductal-cells-QuPath\Ductal_measurements_all_ducts"
 
 to_change = "40x"
-change_t0 = "6666"
+change_t0 = "01.07"
 
 for image in os.listdir(directory):
     if to_change in image:
