@@ -1,9 +1,9 @@
 import os
 
-directory = r"C:\Users\psoor\OneDrive\Desktop\Bachelorarbeit\Ductal-cells-QuPath\Ductal_measurements_all_ducts"
+directory = r"C:\Users\psoor\OneDrive\Desktop\Bachelorarbeit\Pictures\Stainings, Durga - 02.04\T1D\Old"
 
-to_change = "40x"
-change_t0 = "01.07"
+to_change = "61705"
+change_t0 = "6175"
 
 for image in os.listdir(directory):
     if to_change in image:

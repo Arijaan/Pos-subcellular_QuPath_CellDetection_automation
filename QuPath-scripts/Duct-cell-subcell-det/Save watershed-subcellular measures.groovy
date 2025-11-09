@@ -19,7 +19,7 @@ def cleanImageName = imageNameWithoutExtension.replaceAll("[\\\\/:*?\"<>|]", "_"
 
 // Define paths AFTER cleanImageName is created
 def path1 = "C:/Users/Bob/OneDrive/Desktop/Third QuPath/Measurements/${cleanImageName}_subcell_measurements.csv"
-def path2 = "C:/Users/psoor/OneDrive/Desktop/Ductal_measurements/${cleanImageName}_subcell_measurements.csv"
+def path2 = "C:/Users/psoor/OneDrive/Desktop/idk smn/${cleanImageName}_subcell_measurements.csv"
 // Choose output path with dynamic filename
 def outputPath = path2
 def outputFile = new File(outputPath)

@@ -4,18 +4,19 @@ library(dplyr)
 library(tidyr)
 library(openxlsx)
 library(ggsignif)
+library(svDialogs)
 
 cat("Select summary file containing cell counts...\n")
 path1 <- file.choose()
 
 # Ask for folder name
 cat("Enter the name for the output folder (will be created under 'plots and stats'):\n")
-folder_name <-"Ductal_donors"
+folder_name <- dlg_input("Name of the output folder")
 
 # enter plot xlab names and legend name
 
-var1 <- "Control"
-var2 <- "T1D"
+var1 <- "Small ducs"
+var2 <- "Big ducts"
 var3 <- "T2D"
 var4 <- "Aab"
 fill_cust <- ""
@@ -49,104 +50,176 @@ read_sheet_data <- function(file_path, sheet_name) {
     }
     
     # Extract proportion data (rows 7-9 correspond to Prop_1+, Prop_2+, Prop_3+)
-    prop_1_plus <- as.numeric(data[7, -1])
-    prop_2_plus <- as.numeric(data[8, -1])
-    prop_3_plus <- as.numeric(data[9, -1])
-    
-    # Remove NA values
-    prop_1_plus <- prop_1_plus[!is.na(prop_1_plus)]
-    prop_2_plus <- prop_2_plus[!is.na(prop_2_plus)]
-    prop_3_plus <- prop_3_plus[!is.na(prop_3_plus)]
-    
-    n_samples <- length(prop_1_plus)
+    prop_rows <- suppressWarnings(lapply(7:9, function(idx) as.numeric(data[idx, -1])))
+    prop_rows <- lapply(prop_rows, function(values) values[!is.na(values)])
+    n_samples <- min(lengths(prop_rows))
     
     if (n_samples > 0) {
+      prop_rows <- lapply(prop_rows, function(values) values[seq_len(n_samples)])
       return(data.frame(
         Group = rep(sheet_name, n_samples * 3),
         Classification = rep(c("1+", "2+", "3+"), each = n_samples),
-        Percentage = c(prop_1_plus, prop_2_plus, prop_3_plus),
-        Sample_ID = rep(1:n_samples, 3)
+        Percentage = unlist(prop_rows, use.names = FALSE),
+        Sample_ID = rep(seq_len(n_samples), 3)
       ))
-    } else {
-      return(NULL)
     }
-  }, error = function(e) {
-    return(NULL)
-  })
+    NULL
+  }, error = function(e) NULL)
+}
+
+load_all_group_data <- function(file_path, sheets) {
+  raw_list <- lapply(sheets, function(sheet) read_sheet_data(file_path, sheet))
+  names(raw_list) <- sheets
+  valid_idx <- !sapply(raw_list, is.null)
+  if (!any(valid_idx)) {
+    return(list(combined = NULL, raw = list(), available = character(0)))
+  }
+  filtered_raw <- raw_list[valid_idx]
+  available <- names(filtered_raw)
+  combined <- bind_rows(filtered_raw)
+  combined$Group <- factor(combined$Group, levels = available)
+  combined$Classification <- factor(combined$Classification, levels = c("1+", "2+", "3+"))
+  list(combined = combined, raw = filtered_raw, available = available)
 }
 
 # Read data from available sheets
 all_possible_sheets <- c("Control", "T1D", "T2D", "Aab")
-existing_sheets <- tryCatch(excel_sheets(path1), error = function(e) character(0))
-available_sheets <- intersect(all_possible_sheets, existing_sheets)
+cached_sheets <- tryCatch(excel_sheets(path1), error = function(e) character(0))
+available_sheets <- intersect(all_possible_sheets, cached_sheets)
 
 if (!"Control" %in% available_sheets) {
   stop("Control sheet is required but not found in the Excel file!")
 }
 
-all_data <- list()
-for (sheet in available_sheets) {
-  data <- read_sheet_data(path1, sheet)
-  if (!is.null(data)) {
-    all_data[[sheet]] <- data
-  }
-}
+loaded_groups <- load_all_group_data(path1, available_sheets)
 
-if (length(all_data) == 0) {
+if (is.null(loaded_groups$combined)) {
   stop("No valid data found in any sheets!")
 }
 
-# Combine and prepare data
-combined_data <- do.call(rbind, all_data)
-combined_data$Group <- factor(combined_data$Group, levels = available_sheets)
-combined_data$Classification <- factor(combined_data$Classification, levels = c("1+", "2+", "3+"))
+combined_data <- loaded_groups$combined
+all_data <- loaded_groups$raw
+groups <- levels(combined_data$Group)
+
+significance_label <- function(p_value) {
+  if (is.na(p_value)) {
+    ""
+  } else if (p_value < 0.001) {
+    "***"
+  } else if (p_value < 0.01) {
+    "**"
+  } else if (p_value < 0.05) {
+    "*"
+  } else {
+    ""
+  }
+}
+
+generate_comparison_pairs <- function(group_levels) {
+  pairs <- list()
+  non_control <- setdiff(group_levels, "Control")
+  for (group in non_control) {
+    pairs[[paste("Control vs", group)]] <- c("Control", group)
+  }
+  if (all(c("T1D", "T2D") %in% group_levels)) {
+    pairs[["T1D vs T2D"]] <- c("T1D", "T2D")
+  }
+  if (all(c("T1D", "Aab") %in% group_levels)) {
+    pairs[["T1D vs Aab"]] <- c("T1D", "Aab")
+  }
+  pairs
+}
+
+compute_pairwise_result <- function(test_fun, test_name, group1_data, group2_data, classification, comparison_name) {
+  tryCatch({
+    test <- test_fun(group1_data, group2_data)
+    p_value <- test$p.value
+    data.frame(
+      Classification = classification,
+      Comparison = comparison_name,
+      Test = test_name,
+      p_value = p_value,
+      significance = significance_label(p_value),
+      stringsAsFactors = FALSE
+    )
+  }, error = function(e) {
+    data.frame(
+      Classification = classification,
+      Comparison = comparison_name,
+      Test = test_name,
+      p_value = NA,
+      significance = "",
+      stringsAsFactors = FALSE
+    )
+  })
+}
+
+unique_pairs <- function(pairs_list) {
+  if (!length(pairs_list)) {
+    return(list())
+  }
+  keys <- vapply(pairs_list, function(pair) paste(pair, collapse = "::"), character(1))
+  pairs_list[!duplicated(keys)]
+}
+
+build_significance_pairs <- function(ttest_results, comparison_pairs, valid_groups) {
+  if (!nrow(ttest_results)) {
+    return(list())
+  }
+  significant <- ttest_results[ttest_results$significance != "", , drop = FALSE]
+  if (!nrow(significant)) {
+    return(list())
+  }
+  pair_map <- split(significant, significant$Classification)
+  pair_map <- lapply(pair_map, function(df) {
+    pairs <- lapply(df$Comparison, function(comparison) comparison_pairs[[comparison]])
+    pairs <- Filter(function(pair) !is.null(pair) && all(pair %in% valid_groups), pairs)
+    unique_pairs(pairs)
+  })
+  Filter(length, pair_map)
+}
+
+ensure_package <- function(package_name) {
+  if (!require(package_name, character.only = TRUE, quietly = TRUE)) {
+    install.packages(package_name)
+    library(package_name, character.only = TRUE)
+  }
+}
+
+print_banner <- function(title, width = 60, symbol = "=") {
+  line <- paste(rep(symbol, width), collapse = "")
+  cat("\n", line, "\n", title, "\n", line, "\n", sep = "")
+}
+
+print_subbanner <- function(title, width = 60, symbol = "-") {
+  line <- paste(rep(symbol, width), collapse = "")
+  cat("\n", line, "\n", title, "\n", line, "\n", sep = "")
+}
+
+print_rule <- function(width = 60, symbol = "=") {
+  cat("\n", paste(rep(symbol, width), collapse = ""), "\n", sep = "")
+}
 
 # Perform statistical tests
 perform_statistical_tests <- function(data) {
-  groups <- unique(data$Group)
-  classifications <- unique(data$Classification)
+  group_levels <- levels(droplevels(data$Group))
+  classifications <- levels(droplevels(data$Classification))
+  comparison_pairs <- generate_comparison_pairs(group_levels)
   
-  wilcox_results <- data.frame()
-  ttest_results <- data.frame()
-  anova_results <- data.frame()
+  wilcox_results <- list()
+  ttest_results <- list()
+  anova_results <- list()
   
-  # Define comparison pairs
-  comparison_pairs <- list()
-  
-  # Control vs other groups
-  for (group in groups) {
-    if (group != "Control") {
-      comparison_pairs[[paste("Control vs", group)]] <- c("Control", group)
-    }
-  }
-  
-  # T1D vs other non-Control groups
-  if ("T1D" %in% groups && "T2D" %in% groups) {
-    comparison_pairs[["T1D vs T2D"]] <- c("T1D", "T2D")
-  }
-  if ("T1D" %in% groups && "Aab" %in% groups) {
-    comparison_pairs[["T1D vs Aab"]] <- c("T1D", "Aab")
-  }
-  
-  # Perform ANOVA if there are 3 or more groups
-  if (length(groups) >= 3) {
+  if (length(group_levels) >= 3) {
     cat("Performing ANOVA tests (3+ groups detected)...\n")
-    
     for (class in classifications) {
       class_data <- data[data$Classification == class, ]
-      
-      # Check if we have data for at least 3 groups
-      groups_with_data <- unique(class_data$Group)
+      groups_with_data <- levels(droplevels(class_data$Group))
       if (length(groups_with_data) >= 3) {
-        
-        anova_result <- tryCatch({
-          # Perform one-way ANOVA
+        anova_entry <- tryCatch({
           aov_test <- aov(Percentage ~ Group, data = class_data)
           aov_summary <- summary(aov_test)
           p_value <- aov_summary[[1]][["Pr(>F)"]][1]
-          
-          significance <- if (p_value < 0.001) "***" else if (p_value < 0.01) "**" else if (p_value < 0.05) "*" else ""
-          
           data.frame(
             Classification = class,
             Test = "One-way ANOVA",
@@ -154,7 +227,7 @@ perform_statistical_tests <- function(data) {
             df_between = aov_summary[[1]][["Df"]][1],
             df_within = aov_summary[[1]][["Df"]][2],
             p_value = p_value,
-            significance = significance,
+            significance = significance_label(p_value),
             Groups_tested = paste(groups_with_data, collapse = ", "),
             stringsAsFactors = FALSE
           )
@@ -171,91 +244,44 @@ perform_statistical_tests <- function(data) {
             stringsAsFactors = FALSE
           )
         })
-        
-        anova_results <- rbind(anova_results, anova_result)
+        anova_results[[length(anova_results) + 1]] <- anova_entry
       }
     }
   } else {
     cat("ANOVA not performed: Less than 3 groups detected\n")
   }
   
-  for (class in classifications) {
-    class_data <- data[data$Classification == class, ]
-    
-    for (comparison_name in names(comparison_pairs)) {
-      group1 <- comparison_pairs[[comparison_name]][1]
-      group2 <- comparison_pairs[[comparison_name]][2]
-      
-      group1_data <- class_data[class_data$Group == group1, "Percentage"]
-      group2_data <- class_data[class_data$Group == group2, "Percentage"]
-      
-      if (length(group1_data) == 0 || length(group2_data) == 0) {
-        next
+  if (length(comparison_pairs) > 0) {
+    wilcox_fun <- function(x, y) wilcox.test(x, y, alternative = "two.sided")
+    ttest_fun <- function(x, y) t.test(x, y, alternative = "two.sided", var.equal = FALSE)
+    for (class in classifications) {
+      class_data <- data[data$Classification == class, ]
+      for (comparison_name in names(comparison_pairs)) {
+        groups_pair <- comparison_pairs[[comparison_name]]
+        group1_data <- class_data[class_data$Group == groups_pair[1], "Percentage"]
+        group2_data <- class_data[class_data$Group == groups_pair[2], "Percentage"]
+        if (length(group1_data) == 0 || length(group2_data) == 0) {
+          next
+        }
+        wilcox_results[[length(wilcox_results) + 1]] <-
+          compute_pairwise_result(wilcox_fun, "Wilcoxon", group1_data, group2_data, class, comparison_name)
+        ttest_results[[length(ttest_results) + 1]] <-
+          compute_pairwise_result(ttest_fun, "t-test", group1_data, group2_data, class, comparison_name)
       }
-      
-      # Perform Wilcoxon test
-      wilcox_result <- tryCatch({
-        test <- wilcox.test(group1_data, group2_data, alternative = "two.sided")
-        p_value <- test$p.value
-        
-        significance <- if (p_value < 0.001) "***" else if (p_value < 0.01) "**" else if (p_value < 0.05) "*" else ""
-        
-        data.frame(
-          Classification = class,
-          Comparison = comparison_name,
-          Test = "Wilcoxon",
-          p_value = p_value,
-          significance = significance,
-          stringsAsFactors = FALSE
-        )
-      }, error = function(e) {
-        data.frame(
-          Classification = class,
-          Comparison = comparison_name,
-          Test = "Wilcoxon",
-          p_value = NA,
-          significance = "",
-          stringsAsFactors = FALSE
-        )
-      })
-      
-      # Perform Two-Sample t-test
-      ttest_result <- tryCatch({
-        test <- t.test(group1_data, group2_data, alternative = "two.sided", var.equal = FALSE)
-        p_value <- test$p.value
-        
-        significance <- if (p_value < 0.001) "***" else if (p_value < 0.01) "**" else if (p_value < 0.05) "*" else ""
-        
-        data.frame(
-          Classification = class,
-          Comparison = comparison_name,
-          Test = "t-test",
-          p_value = p_value,
-          significance = significance,
-          stringsAsFactors = FALSE
-        )
-      }, error = function(e) {
-        data.frame(
-          Classification = class,
-          Comparison = comparison_name,
-          Test = "t-test",
-          p_value = NA,
-          significance = "",
-          stringsAsFactors = FALSE
-        )
-      })
-      
-      wilcox_results <- rbind(wilcox_results, wilcox_result)
-      ttest_results <- rbind(ttest_results, ttest_result)
     }
   }
   
-  return(list(
-    wilcox = wilcox_results,
-    ttest = ttest_results,
-    anova = anova_results,
-    combined = rbind(wilcox_results, ttest_results)
-  ))
+  wilcox_df <- if (length(wilcox_results)) bind_rows(wilcox_results) else data.frame()
+  ttest_df <- if (length(ttest_results)) bind_rows(ttest_results) else data.frame()
+  anova_df <- if (length(anova_results)) bind_rows(anova_results) else data.frame()
+  
+  list(
+    wilcox = wilcox_df,
+    ttest = ttest_df,
+    anova = anova_df,
+    combined = bind_rows(wilcox_df, ttest_df),
+    comparisons = comparison_pairs
+  )
 }
 
 stat_results <- perform_statistical_tests(combined_data)
@@ -291,62 +317,28 @@ p <- ggplot(combined_data, aes(x = Group, y = Percentage, fill = Group)) +
   )
 
 # Add significance annotations for each classification
-for (class in c("1+", "2+", "3+")) {
-  class_ttest <- stat_results$ttest[stat_results$ttest$Classification == class & 
-                                   stat_results$ttest$significance != "", ]
-  
-  if (nrow(class_ttest) > 0) {
-    comparisons_list <- list()
-    
-    for (i in 1:nrow(class_ttest)) {
-      comparison <- class_ttest$Comparison[i]
-      
-      if (grepl("Control vs", comparison)) {
-        group1 <- "Control"
-        group2 <- sub("Control vs ", "", comparison)
-      } else if (grepl("T1D vs", comparison)) {
-        parts <- strsplit(comparison, " vs ")[[1]]
-        group1 <- parts[1]
-        group2 <- parts[2]
-      } else {
-        next
-      }
-      
-      if (group1 %in% groups && group2 %in% groups) {
-        comparisons_list[[length(comparisons_list) + 1]] <- c(group1, group2)
-      }
-    }
-    
-    if (length(comparisons_list) > 0) {
-      p <- p + 
-        geom_signif(
-          data = subset(combined_data, Classification == class),
-          comparisons = comparisons_list,
-          test = "t.test",
-          map_signif_level = c("***" = 0.001, "**" = 0.01, "*" = 0.05),
-          step_increase = 0.1,
-          tip_length = 0.02
-        )
-    }
+significance_mapping <- build_significance_pairs(stat_results$ttest, stat_results$comparisons, groups)
+if (length(significance_mapping)) {
+  signif_thresholds <- c("***" = 0.001, "**" = 0.01, "*" = 0.05)
+  for (class in names(significance_mapping)) {
+    p <- p +
+      geom_signif(
+        data = subset(combined_data, Classification == class),
+        comparisons = significance_mapping[[class]],
+        test = "t.test",
+        map_signif_level = signif_thresholds,
+        step_increase = 0.1,
+        tip_length = 0.02
+      )
   }
 }
 
 # Add sample size annotations
-sample_counts <- table(combined_data$Group, combined_data$Classification)
-count_data <- data.frame()
-
-for (group in rownames(sample_counts)) {
-  for (class in colnames(sample_counts)) {
-    if (sample_counts[group, class] > 0) {
-      count_data <- rbind(count_data, data.frame(
-        Group = group,
-        Classification = class,
-        count = sample_counts[group, class],
-        stringsAsFactors = FALSE
-      ))
-    }
-  }
-}
+sample_counts <- as.data.frame(as.table(table(combined_data$Group, combined_data$Classification)))
+colnames(sample_counts) <- c("Group", "Classification", "count")
+count_data <- subset(sample_counts, count > 0)
+count_data$Group <- factor(count_data$Group, levels = groups)
+count_data$Classification <- factor(count_data$Classification, levels = levels(combined_data$Classification))
 
 p <- p + 
   geom_text(
@@ -407,15 +399,8 @@ input_copy_path <- file.path(output_dir, paste0("INPUT_", basename(path1)))
 file.copy(path1, input_copy_path, overwrite = TRUE)
 
 # POWER ANALYSIS
-cat("\n", rep("=", 60), "\n", sep = "")
-cat("POWER ANALYSIS - SAMPLE SIZE CALCULATION")
-cat("\n", rep("=", 60), "\n", sep = "")
+print_banner("POWER ANALYSIS - SAMPLE SIZE CALCULATION")
 
-# Install pwr package if not available
-if (!require(pwr, quietly = TRUE)) {
-  install.packages("pwr")
-  library(pwr)
-}
 
 # Function to perform power analysis for t-test
 perform_power_analysis <- function(control_data, comparison_data, group_name) {
@@ -480,8 +465,7 @@ cat("\n- Control mean:", round(mean(control_data, na.rm = TRUE), 2), "%")
 cat("\n- Control SD:", round(sd(control_data, na.rm = TRUE), 2), "%")
 cat("\n- Control n:", length(control_data))
 
-cat("\n\nPOWER ANALYSIS RESULTS (for 80% power, α = 0.05):\n")
-cat(rep("-", 80), "\n", sep = "")
+print_subbanner("POWER ANALYSIS RESULTS (for 80% power, α = 0.05):", width = 80)
 
 for (group in names(all_data)) {
   if (group != "Control") {
@@ -559,9 +543,7 @@ cat("- boxplot.png\n")
 cat("- Statistical_Results.xlsx (now includes Power Analysis sheet)\n")
 cat("- INPUT_", basename(path1), "\n", sep = "")
 
-cat("\n", rep("=", 60), "\n", sep = "")
-cat("STATISTICAL RESULTS SUMMARY")
-cat("\n", rep("=", 60), "\n", sep = "")
+print_banner("STATISTICAL RESULTS SUMMARY")
 
 cat("\nWILCOXON TEST RESULTS:\n")
 if (nrow(stat_results$wilcox) > 0) {
@@ -584,24 +566,17 @@ if (nrow(stat_results$anova) > 0) {
   cat("No ANOVA results available (requires 3+ groups)\n")
 }
 
-cat("\n", rep("=", 60), "\n", sep = "")
+print_rule()
 
 # ADDITIONAL POWER ANALYSIS FOR EACH COMPARISON
-cat("\n", rep("=", 60), "\n", sep = "")
-cat("DETAILED POWER ANALYSIS FOR EACH COMPARISON AND CLASSIFICATION")
-cat("\n", rep("=", 60), "\n", sep = "")
+print_banner("DETAILED POWER ANALYSIS FOR EACH COMPARISON AND CLASSIFICATION")
 
 # Install effsize package if not available for Cohen's d calculation
-if (!require(effsize, quietly = TRUE)) {
-  install.packages("effsize")
-  library(effsize)
-}
+ensure_package("effsize")
 
 # Function to perform and display power analysis for specific classification
 perform_classification_power_analysis <- function(control_data, treatment_data, comparison_name, classification) {
-  cat("\n", rep("-", 60), "\n", sep = "")
-  cat("POWER ANALYSIS:", comparison_name, "- Classification:", classification, "\n")
-  cat(rep("-", 60), "\n", sep = "")
+  print_subbanner(paste("POWER ANALYSIS:", comparison_name, "- Classification:", classification))
   
   if (length(control_data) == 0 || length(treatment_data) == 0) {
     cat("Insufficient data for this classification\n")
@@ -747,66 +722,38 @@ perform_classification_power_analysis <- function(control_data, treatment_data, 
   ))
 }
 
+analyze_group_vs_control <- function(group_name, classifications, data, available_groups) {
+  if (!(group_name %in% available_groups)) {
+    return(list())
+  }
+  print_banner(paste(group_name, "vs Control"), width = 80)
+  group_results <- list()
+  for (class in classifications) {
+    control_values <- data[data$Group == "Control" & data$Classification == class, "Percentage"]
+    treatment_values <- data[data$Group == group_name & data$Classification == class, "Percentage"]
+    result <- perform_classification_power_analysis(control_values, treatment_values, paste(group_name, "vs Control"), class)
+    if (!is.null(result)) {
+      group_results[[paste(group_name, class, sep = "_")]] <- result
+    }
+  }
+  group_results
+}
+
 # Perform power analysis for each comparison and classification
 all_power_results <- list()
-classifications <- c("1+", "2+", "3+")
+classifications <- levels(combined_data$Classification)
+comparison_groups <- c("T1D", "T2D", "Aab")
 
-# Control vs T1D
-if ("T1D" %in% names(all_data)) {
-  cat("\n", rep("=", 80), "\n", sep = "")
-  cat("T1D vs Control")
-  cat("\n", rep("=", 80), "\n", sep = "")
-  
-  for (class in classifications) {
-    control_data <- combined_data[combined_data$Group == "Control" & combined_data$Classification == class, "Percentage"]
-    t1d_data <- combined_data[combined_data$Group == "T1D" & combined_data$Classification == class, "Percentage"]
-    
-    result <- perform_classification_power_analysis(control_data, t1d_data, "T1D vs Control", class)
-    if (!is.null(result)) {
-      all_power_results[[paste("T1D_vs_Control", class, sep = "_")]] <- result
-    }
-  }
-}
-
-# Control vs T2D
-if ("T2D" %in% names(all_data)) {
-  cat("\n", rep("=", 80), "\n", sep = "")
-  cat("T2D vs Control")
-  cat("\n", rep("=", 80), "\n", sep = "")
-  
-  for (class in classifications) {
-    control_data <- combined_data[combined_data$Group == "Control" & combined_data$Classification == class, "Percentage"]
-    t2d_data <- combined_data[combined_data$Group == "T2D" & combined_data$Classification == class, "Percentage"]
-    
-    result <- perform_classification_power_analysis(control_data, t2d_data, "T2D vs Control", class)
-    if (!is.null(result)) {
-      all_power_results[[paste("T2D_vs_Control", class, sep = "_")]] <- result
-    }
-  }
-}
-
-# Control vs Aab
-if ("Aab" %in% names(all_data)) {
-  cat("\n", rep("=", 80), "\n", sep = "")
-  cat("Aab vs Control")
-  cat("\n", rep("=", 80), "\n", sep = "")
-  
-  for (class in classifications) {
-    control_data <- combined_data[combined_data$Group == "Control" & combined_data$Classification == class, "Percentage"]
-    aab_data <- combined_data[combined_data$Group == "Aab" & combined_data$Classification == class, "Percentage"]
-    
-    result <- perform_classification_power_analysis(control_data, aab_data, "Aab vs Control", class)
-    if (!is.null(result)) {
-      all_power_results[[paste("Aab_vs_Control", class, sep = "_")]] <- result
-    }
+for (group in comparison_groups) {
+  group_results <- analyze_group_vs_control(group, classifications, combined_data, groups)
+  if (length(group_results)) {
+    all_power_results <- c(all_power_results, group_results)
   }
 }
 
 # Create comprehensive summary table
 if (length(all_power_results) > 0) {
-  cat("\n", rep("=", 100), "\n", sep = "")
-  cat("COMPREHENSIVE POWER ANALYSIS SUMMARY")
-  cat("\n", rep("=", 100), "\n", sep = "")
+  print_banner("COMPREHENSIVE POWER ANALYSIS SUMMARY", width = 100)
   
   summary_df <- data.frame(
     Comparison = sapply(all_power_results, function(x) x$comparison),
@@ -835,7 +782,7 @@ if (length(all_power_results) > 0) {
              "2+ = Medium expression cells", 
              "3+ = High expression cells",
              "",
-             "Power Analysis Target: 80% power, α = 0.05"),
+             "Power Analysis Target: 80% power, a = 0.05"),
     stringsAsFactors = FALSE
   )
   
