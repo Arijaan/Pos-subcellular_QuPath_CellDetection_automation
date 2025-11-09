@@ -13,9 +13,13 @@ def imageNameWithoutExtension = imageName.replaceAll("\\.[^.]*\$", "")
 // Clean filename by removing invalid characters for file system
 def cleanImageName = imageNameWithoutExtension.replaceAll("[\\\\/:*?\"<>|]", "_").trim()
 
-// Define paths AFTER cleanImageName is created
-def path1 = "C:/Users/Bob/OneDrive/Desktop/Third QuPath/Measurements/${cleanImageName}_measurements.csv"
-def path2 = "C:/Users/psoor/OneDrive/Desktop/Bachelorarbeit/Measurementss/${cleanImageName}_measurements.csv"
+// Outputdir selection
+def outputDir = Dialogs.promptForDirectory("Select output folder", null)
+if (outputDir == null)
+    return
+// Choose output path with dynamic filename
+def outputPath = outputDir.toPath().resolve("${cleanImageName}_subcell_measurements.csv").toString()
+def outputFile = new File(outputPath)
 
 // Separate each measurement value in the output file with a comma (",")
 def separator = ","
@@ -31,9 +35,6 @@ def columnsToInclude = new String[]{"Image", "Classification", "Nucleus: miR-155
 
 def exportType = PathCellObject.class
 
-// Choose output path with dynamic filename
-def outputPath = path2
-def outputFile = new File(outputPath)
 
 // Create the measurements folder if it doesn't exist
 def parentDir = outputFile.getParentFile()

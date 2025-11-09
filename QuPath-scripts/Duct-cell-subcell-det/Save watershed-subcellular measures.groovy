@@ -1,6 +1,7 @@
 import qupath.lib.gui.tools.MeasurementExporter
 import qupath.lib.objects.PathCellObject
 import qupath.lib.objects.PathDetectionObject
+import qupath.lib.gui.dialogs.Dialogs
 
 // Script to save measurements after watershed cell detection and subcellular detection
 // Follows the same structure as Save measures.groovy
@@ -18,10 +19,11 @@ def imageNameWithoutExtension = imageName.replaceAll("\\.[^.]*\$", "")
 def cleanImageName = imageNameWithoutExtension.replaceAll("[\\\\/:*?\"<>|]", "_").trim()
 
 // Define paths AFTER cleanImageName is created
-def path1 = "C:/Users/Bob/OneDrive/Desktop/Third QuPath/Measurements/${cleanImageName}_subcell_measurements.csv"
-def path2 = "C:/Users/psoor/OneDrive/Desktop/idk smn/${cleanImageName}_subcell_measurements.csv"
+def outputDir = Dialogs.promptForDirectory("Select output folder", null)
+if (outputDir == null)
+    return
 // Choose output path with dynamic filename
-def outputPath = path2
+def outputPath = outputDir.toPath().resolve("${cleanImageName}_subcell_measurements.csv").toString()
 def outputFile = new File(outputPath)
 
 // Separate each measurement value in the output file with a comma (",")

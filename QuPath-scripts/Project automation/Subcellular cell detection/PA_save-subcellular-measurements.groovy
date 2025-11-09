@@ -52,9 +52,11 @@ for (imageEntry in imageEntries) {
         def cleanImageName = imageNameWithoutExtension.replaceAll("[\\\\/:*?\"<>|]", "_").trim()
         
         // Create output path for this specific image
-        def path1 = "C:/Users/Bob/OneDrive/Desktop/Third QuPath/Measurements/${cleanImageName}_subcell_measurements.csv"
-        def path2 = "C:/Users/psoor/OneDrive/Desktop/islet_Measurements/${cleanImageName}_subcell_measurements.csv"
-        def outputPath = path2
+        def outputDir = Dialogs.promptForDirectory("Select output folder", null)
+        if (outputDir == null)
+            return
+        // Choose output path with dynamic filename
+        def outputPath = outputDir.toPath().resolve("${cleanImageName}_subcell_measurements.csv").toString()
         def outputFile = new File(outputPath)
         
         // Create the measurements folder if it doesn't exist
