@@ -5,13 +5,17 @@ library(tidyr)
 library(openxlsx)
 library(ggsignif)
 library(svDialogs)
+library(pwr)
 
 cat("Select summary file containing cell counts...\n")
 path1 <- file.choose()
 
 # Ask for folder name
 cat("Enter the name for the output folder (will be created under 'plots and stats'):\n")
-folder_name <- dlg_input("Name of the output folder")
+folder_name <- dlg_input("Name of the output folder")$res
+if (is.null(folder_name) || folder_name == "") {
+  folder_name <- paste0("analysis_", format(Sys.time(), "%Y%m%d_%H%M%S"))
+}
 
 # enter plot xlab names and legend name
 
@@ -24,9 +28,6 @@ title_cust <- ""
 
 # Clean the folder name (remove invalid characters)
 folder_name <- gsub("[^a-zA-Z0-9_-]", "_", folder_name)
-if (folder_name == "" || is.na(folder_name)) {
-  folder_name <- paste0("analysis_", format(Sys.time(), "%Y%m%d_%H%M%S"))
-}
 
 base_output_dir <- "C:/Users/psoor/OneDrive/Desktop/Bachelorarbeit/Figures/plots and stats"
 output_dir <- file.path(base_output_dir, folder_name)
