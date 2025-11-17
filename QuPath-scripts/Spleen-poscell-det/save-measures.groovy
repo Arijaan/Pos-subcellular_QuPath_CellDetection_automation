@@ -1,5 +1,6 @@
 import qupath.lib.gui.tools.MeasurementExporter
 import qupath.lib.objects.PathCellObject
+import qupath.fx.dialogs.FileChoosers
 
 // Get the current open image instead of all project images
 def imageData = getCurrentImageData()
@@ -15,7 +16,7 @@ def cleanImageName = imageNameWithoutExtension.replaceAll("[\\\\/:*?\"<>|]", "_"
 
 
 // Create output path for this specific image
-def outputDir = Dialogs.promptForDirectory("Select output folder", null)
+def outputDir = FileChoosers.promptForDirectory("Select output folder", null)
 if (outputDir == null)
     return
 // Choose output path with dynamic filename

@@ -1,7 +1,7 @@
 import qupath.lib.gui.tools.MeasurementExporter
 import qupath.lib.objects.PathCellObject
 import qupath.lib.objects.PathDetectionObject
-import qupath.lib.gui.dialogs.Dialogs
+import qupath.fx.dialogs.FileChoosers
 
 // Script to save measurements after watershed cell detection and subcellular detection
 // Follows the same structure as Save measures.groovy
@@ -19,7 +19,7 @@ def imageNameWithoutExtension = imageName.replaceAll("\\.[^.]*\$", "")
 def cleanImageName = imageNameWithoutExtension.replaceAll("[\\\\/:*?\"<>|]", "_").trim()
 
 // Define paths AFTER cleanImageName is created
-def outputDir = Dialogs.promptForDirectory("Select output folder", null)
+def outputDir = FileChoosers.promptForDirectory("Select output folder", null)
 if (outputDir == null)
     return
 // Choose output path with dynamic filename
