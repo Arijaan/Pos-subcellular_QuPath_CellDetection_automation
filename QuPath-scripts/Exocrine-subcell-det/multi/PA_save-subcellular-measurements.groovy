@@ -4,6 +4,7 @@
 
 import qupath.lib.gui.tools.MeasurementExporter
 import qupath.lib.objects.PathCellObject
+import qupath.fx.dialogs.FileChoosers
 
 def project = getProject()
 if (project == null) {
@@ -52,7 +53,7 @@ for (imageEntry in imageEntries) {
         def cleanImageName = imageNameWithoutExtension.replaceAll("[\\\\/:*?\"<>|]", "_").trim()
         
         // Create output path for this specific image
-        def outputDir = Dialogs.promptForDirectory("Select output folder", null)
+        def outputDir = FileChoosers.promptForDirectory("Select output folder", null)
         if (outputDir == null)
             return
         // Choose output path with dynamic filename
