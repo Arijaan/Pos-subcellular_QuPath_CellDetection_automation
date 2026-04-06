@@ -42,7 +42,7 @@ A tip for achieving optimal results in this way, would be first tweaking the sta
 ggplot2, tibble, dplyr, readxl, ggsignif
 
 ```R
-install.packages(c("ggplot2", "tibble, dplyr, readxl, ggsignif"))
+install.packages(c("ggplot2", "tibble, dplyr, readxl, ggsignif", svdialogs, pwr))
 ```
 
 
