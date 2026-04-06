@@ -42,7 +42,7 @@ A tip for achieving optimal results in this way, would be first tweaking the sta
 ggplot2, tibble, dplyr, readxl, ggsignif
 
 ```R
-packages.install("library_name")
+install.packages(c("ggplot2", "tibble, dplyr, readxl, ggsignif"))
 ```
 
 
@@ -53,10 +53,10 @@ Python 3.0 and above
 Pandas
 tkinter
 
-```
+```python
 pip install pandas
 ```
-```
+```python
 pip install tkinter
 ```
 
